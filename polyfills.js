@@ -127,18 +127,21 @@ function patch (fs) {
   fs.read = typeof fs.read !== 'function' ? fs.read
   : (function (fs$read) {
     function read (fd, buffer, offset, length, position, callback_) {
-      var callback
-      if (callback_ && typeof callback_ === 'function') {
+      // The callback is the last argument, because fs.read also accepts
+      // (fd, cb), (fd, options, cb) and (fd, buffer[, options], cb).
+      var args = Array.prototype.slice.call(arguments)
+      var cb = args[args.length - 1]
+      if (typeof cb === 'function') {
         var eagCounter = 0
-        callback = function (er, _, __) {
+        args[args.length - 1] = function (er, _, __) {
           if (er && er.code === 'EAGAIN' && eagCounter < 10) {
             eagCounter ++
-            return fs$read.call(fs, fd, buffer, offset, length, position, callback)
+            return fs$read.apply(fs, args)
           }
-          callback_.apply(this, arguments)
+          cb.apply(this, arguments)
         }
       }
-      return fs$read.call(fs, fd, buffer, offset, length, position, callback)
+      return fs$read.apply(fs, args)
     }
 
     // This ensures `util.promisify` works as it does for native `fs.read`.
